@@ -60,7 +60,7 @@ async def multiply(x: int = 10, y: int = 20):
     res=x*y
     return {"result":res}
 
-app.mount("/app",StaticFiles(directory="vite-project/dist" , html=True),name="app")
+#app.mount("/app",StaticFiles(directory="vite-project/dist" , html=True),name="app")
 
 
 
