@@ -11,7 +11,6 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from db import get_db_session
-import psycopg
 from config import settings
 
 # Serve static folder
