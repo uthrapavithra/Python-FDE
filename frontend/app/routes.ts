@@ -1,0 +1,8 @@
+import  { layout, route, type RouteConfig  } from "@react-router/dev/routes";
+
+export default [
+    layout("layouts/default.tsx",[
+    route("/","routes/home.tsx"),
+    route("job-boards","routes/job-boards.tsx"),
+    route("job-boards/:jobBoardId/job-posts","routes/job-posts.tsx")])
+] satisfies RouteConfig;
