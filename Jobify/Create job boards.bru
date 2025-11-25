@@ -1,0 +1,21 @@
+meta {
+  name: Create job boards
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{BASE_URL}}/api/job-boards
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  company_name: abcde
+  logo: @file(C:\Users\uthra.v\Documents\Training\Full_Stack\Python-FDE\abcde-logo.jpg)
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
