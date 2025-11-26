@@ -8,14 +8,14 @@ from fastapi.templating import Jinja2Templates
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from typing import Annotated
+from typing import Annotated, Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from db import get_db_session
 from file_storage import upload_file
 #import psycopg
 from config import settings
-from models import JobBoard,JobPost
+from models import JobBoard,JobPost,JobApplication
 from pydantic import BaseModel, Field, field_validator
 
 from supabase import create_client, Client
@@ -35,6 +35,7 @@ app= FastAPI()
 ##/Uploads
 if not settings.PRODUCTION:
     app.mount("/uploads", StaticFiles(directory="uploads/company_logos"))
+    #app.mount("/uploads", StaticFiles(directory="uploads/resumes"))
 
 
 class User(BaseModel):
@@ -167,9 +168,6 @@ async def api_create_new_job_board(job_board_form:Annotated[JobBoardForm,Form()]
     logo_contents = await job_board_form.logo.read()
     file_url = upload_file("company_logos",job_board_form.logo.filename,logo_contents,job_board_form.logo.content_type)
     # query = f"insert into job-boards(logo_url) values ({file_url})"
-    
-
-
     with get_db_session() as session:
         
         new_post = JobBoard(
@@ -182,21 +180,127 @@ async def api_create_new_job_board(job_board_form:Annotated[JobBoardForm,Form()]
         
     return {"company_name":job_board_form.company_name, "file_url":file_url}
 
-@app.put("/api/job-boards")
-async def api_create_new_job_board(job_board_form:Annotated[JobBoardForm,Form()]):
-    logo_contents = await job_board_form.logo.read()
-    file_url = upload_file("company_logos",job_board_form.logo.filename,logo_contents,job_board_form.logo.content_type)
+@app.put("/api/job-boards/{job_board_id}")
+async def update_job_board(job_board_id: int,
+    company_name: Annotated[Optional[str], Form()] = None,
+    logo: Annotated[Optional[UploadFile], File()] = None):
+    
     
     with get_db_session() as session:
+        job_board = session.query(JobBoard).filter(JobBoard.id == job_board_id).first()
+        c_name = job_board.company_name
+
+        if not job_board:
+            raise HTTPException (status_code=404,detail="Job board not found")
         
-        l_url = session.query(JobBoard).filter(JobBoard.company_name == str(job_board_form.company_name)).first()
-        l_url.logo_url = file_url
+        # Update company_name if provided
+        if company_name:
+            job_board.company_name = company_name.lower()
+            c_name = company_name.lower()
+        
+
+        if logo:
+            logo_contents = await logo.read()
+            file_url = upload_file("company_logos",logo.filename,logo_contents,logo.content_type)
+            job_board.logo_url = file_url
+        else:
+            file_url = job_board.logo_url 
 
         session.commit()
                 
-    return {"company_name":job_board_form.company_name, "file_url":file_url}
+    return {"job_board_id": job_board_id,"company_name":c_name, "file_url":file_url }
 
 
+@app.delete("/api/job-boards/{job_board_id}")
+def delete_job_board(job_board_id: int):
+
+    with get_db_session() as session:
+        # 1. Find JobBoard
+        job_board = session.get(JobBoard, job_board_id)
+
+        if not job_board:
+            raise HTTPException(status_code=404, detail="Job board not found")
+
+         # 2. Fetch all job posts under this job board
+        job_posts = session.query(JobPost).filter(
+            JobPost.job_board_id == job_board_id
+        ).all()
+
+        # 3. Collect all job_post_ids
+        job_post_ids = [jp.id for jp in job_posts]
+
+        if job_post_ids:
+            # 4. Delete job applications related to these job posts
+            session.query(JobApplication).filter(
+                JobApplication.job_post_id.in_(job_post_ids)
+            ).delete(synchronize_session=False)
+
+            # 5. Delete job posts under job board
+            session.query(JobPost).filter(
+                JobPost.id.in_(job_post_ids)
+            ).delete(synchronize_session=False)
+
+        # 6. Safe deletion
+        session.delete(job_board)
+        session.commit()
+
+    return {"message": "Job board deleted successfully"}
+
+users = {}  
+class GetJobApplications(BaseModel):
+    job_post_id : int
+    first_name: str 
+    last_name: str
+    email: str
+    resume : UploadFile = File()
+    
+
+@app.post("/api/job-applications")
+async def api_create_new_job_application(job_application:Annotated[GetJobApplications,Form()] ):
+    logo_contents = await job_application.resume.read()
+    file_url = upload_file("company_logos",job_application.resume.filename,logo_contents,job_application.resume.content_type)
+    
+    with get_db_session() as session:
+
+        get_status = session.query(JobPost.status).filter(JobPost.id == job_application.job_post_id).scalar()
+        # print("STATUS-----",get_status)
+        if str(get_status) == "Closed":
+            raise HTTPException(status_code=404, detail="This job post is already closed")
+        
+        else:
+            new_post = JobApplication(
+                    job_post_id = job_application.job_post_id,
+                    first_name= job_application.first_name,
+                    last_name = job_application.last_name,
+                    email=job_application.email,
+                    resume_url = file_url,
+                    
+                    )
+
+            session.add(new_post)
+            session.commit()
+            session.refresh(new_post)
+        
+    return {"status":"User added"}
+
+
+
+@app.get("/api/job-applications")
+async def get_job_application():
+     with get_db_session() as session:
+        get_job_applications = session.query(JobApplication).all()
+
+        return get_job_applications
+
+@app.put("/api/job-posts/{job_post_id}/close")
+async def close_job_posts(job_post_id : int):
+    with get_db_session() as session:
+        get_status = session.query(JobPost).filter(JobPost.id == job_post_id).first()
+        get_status.status = "Closed"
+        session.commit()
+
+
+    return{"details":f"{job_post_id} is Closed"}
 
 
   

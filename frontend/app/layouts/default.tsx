@@ -1,20 +1,19 @@
-import { NavLink, Outlet } from "react-router";
+import { NavLink, Outlet , Button ,Link} from "react-router";
+import "./DefaultLayout.css";
 
-export default function DefaultLayout() { 
-  const navLinkStyle=
-    ({isActive}) => {
-      return {backgroundColor: isActive ? "yellow" : "inherit"}
-    }
-  return (<main>
-    <nav style={{fontWeight: 'bolder', 
-                 display: 'flex', 
-                 justifyContent: 'space-between', 
-                 width: 150}}>
-      <NavLink to="/" style={navLinkStyle}>Home</NavLink>
-      <NavLink to="/job-boards" style={navLinkStyle}>JobBoards</NavLink>
-    </nav>
-    <Outlet/>
-  </main>);
+export default function DefaultLayout() {
+  const navLinkClass = ({ isActive }) =>
+    isActive ? "nav-link active" : "nav-link";
+
+  return (
+    <main className="layout-container">
+      
+      <nav className="navbar">
+        <img src="uploads/job.jpg" width="50" height = "50" ></img>
+        <NavLink to="/" className={navLinkClass}>Home</NavLink>
+        <NavLink to="/job-boards" className={navLinkClass}>JobBoards</NavLink>
+      </nav>
+      <Outlet/>
+    </main>
+  );
 }
-
- 

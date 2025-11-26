@@ -1,0 +1,24 @@
+meta {
+  name: Add job applications
+  type: http
+  seq: 5
+}
+
+post {
+  url: http://localhost:8000/api/job-applications
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  job_post_id: 1
+  first_name: John
+  last_name: Doe
+  email: john@mail.com
+  resume: @file(C:\Users\uthra.v\Documents\Training\Full_Stack\Python-FDE\john.txt)
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

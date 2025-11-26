@@ -4,5 +4,6 @@ export default [
     layout("layouts/default.tsx",[
     route("/","routes/home.tsx"),
     route("job-boards","routes/job-boards.tsx"),
-    route("job-boards/:jobBoardId/job-posts","routes/job-posts.tsx")])
+    route("job-boards/:jobBoardId/job-posts","routes/job-posts.tsx"),
+    route("job-boards/new","routes/new-job-board.tsx")])
 ] satisfies RouteConfig;
