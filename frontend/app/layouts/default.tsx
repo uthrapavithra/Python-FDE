@@ -1,4 +1,4 @@
-import { NavLink, Outlet , Button ,Link} from "react-router";
+import { NavLink, Outlet  ,Link} from "react-router";
 import "./DefaultLayout.css";
 
 export default function DefaultLayout() {

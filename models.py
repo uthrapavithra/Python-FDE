@@ -26,6 +26,7 @@ class JobApplication(Base):
   last_name = Column(String, nullable=False)
   email = Column(String, nullable=False)
   resume_url = Column(String,nullable=True)
+  job_post = relationship("JobPost")
   
   
  

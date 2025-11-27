@@ -4,12 +4,13 @@ meta {
   seq: 6
 }
 
-get {
-  url: 
+put {
+  url: {{BASE_URL}}/api/job-posts/1/close
   body: none
   auth: inherit
 }
 
 settings {
   encodeUrl: true
+  timeout: 0
 }

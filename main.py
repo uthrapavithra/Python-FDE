@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Response,status,Cookie
 from fastapi import FastAPI, Request, UploadFile, File, Form
 import shutil
 import os
@@ -12,17 +12,19 @@ from typing import Annotated, Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from db import get_db_session
-from file_storage import upload_file
+from file_storage import upload_file,upload_file_resume
 #import psycopg
 from config import settings
 from models import JobBoard,JobPost,JobApplication
 from pydantic import BaseModel, Field, field_validator
-
+from auth import AdminAuthzMiddleware, authenticate_admin , AdminSessionMiddleware
 from supabase import create_client, Client
 
 # Serve static folder
 
 app= FastAPI()
+app.add_middleware(AdminAuthzMiddleware)
+app.add_middleware(AdminSessionMiddleware)
 # app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 
 # templates = Jinja2Templates(directory="templates")
@@ -35,7 +37,7 @@ app= FastAPI()
 ##/Uploads
 if not settings.PRODUCTION:
     app.mount("/uploads", StaticFiles(directory="uploads/company_logos"))
-    #app.mount("/uploads", StaticFiles(directory="uploads/resumes"))
+    app.mount("/uploads", StaticFiles(directory="uploads/resumes"))
 
 
 class User(BaseModel):
@@ -70,7 +72,7 @@ async def health():
 async def company_job_board():
     with get_db_session() as session:
         jobBoards=session.query(JobBoard).all()
-        jobPosts = session.query(JobPost).all()
+        #jobPosts = session.query(JobPost).all()
         # print(jobBoards)
         # print(jobPosts)
         return jobBoards
@@ -113,14 +115,14 @@ async def api_company_job_board(job_board_id):
      print(jobPosts)
      return jobPosts
   
-@app.get("/api/job-boards/{company_name}")
-async def api_company_job_board(company_name):
-  with get_db_session() as session:
-     jobPosts = session.query(JobPost) \
-        .join(JobPost.job_board) \
-        .filter(JobBoard.company_name.__eq__(company_name)) \
-        .all()
-     return jobPosts
+# @app.get("/api/job-boards/{company_name}")
+# async def api_company_job_board(company_name):
+#   with get_db_session() as session:
+#      jobPosts = session.query(JobPost) \
+#         .join(JobPost.job_board) \
+#         .filter(JobBoard.company_name.__eq__(company_name)) \
+#         .all()
+#      return jobPosts
   
 
 
@@ -148,6 +150,25 @@ def register_user(data: User):
     result = {"name":data.username,"id":data.id}
     return {"message": result}
 
+# def require_admin(admin_session: str = Cookie(None)):
+#     # Check if cookie exists
+#     print("Admin token",admin_session)
+#     if admin_session is None:
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Not authenticated"
+#         )
+
+#     # Validate the token (example)
+#     # if admin_session :
+#     #     raise HTTPException(
+#     #         status_code=status.HTTP_403_FORBIDDEN,
+#     #         detail="Forbidden: Admin access required"
+#     #     )
+
+#     return True
+
+
 #### FORM BINDING WITH PYDANTIC
 
 class JobBoardForm(BaseModel):
@@ -162,7 +183,7 @@ class JobBoardForm(BaseModel):
     return v.lower()
 
 
-
+##create job board -- ,admin: bool = Depends(require_admin)
 @app.post("/api/job-boards")
 async def api_create_new_job_board(job_board_form:Annotated[JobBoardForm,Form()]):
     logo_contents = await job_board_form.logo.read()
@@ -180,15 +201,32 @@ async def api_create_new_job_board(job_board_form:Annotated[JobBoardForm,Form()]
         
     return {"company_name":job_board_form.company_name, "file_url":file_url}
 
+
+##get job boards by job_board_id
+@app.get("/api/job-boards/{job_board_id}")
+async def api_company_job_board_by_id(job_board_id : int):
+  
+  with get_db_session() as session:
+     jobBoards = session.query(JobBoard) \
+        .filter(JobBoard.id == job_board_id) \
+        .first()
+     
+     return jobBoards
+
+
+##update job board
 @app.put("/api/job-boards/{job_board_id}")
 async def update_job_board(job_board_id: int,
     company_name: Annotated[Optional[str], Form()] = None,
     logo: Annotated[Optional[UploadFile], File()] = None):
     
-    
+    # print("company -----",company_name)
+    # print("Logooooo -----",logo)
     with get_db_session() as session:
         job_board = session.query(JobBoard).filter(JobBoard.id == job_board_id).first()
         c_name = job_board.company_name
+        
+        print("logo---",logo)
 
         if not job_board:
             raise HTTPException (status_code=404,detail="Job board not found")
@@ -198,11 +236,11 @@ async def update_job_board(job_board_id: int,
             job_board.company_name = company_name.lower()
             c_name = company_name.lower()
         
-
-        if logo:
-            logo_contents = await logo.read()
-            file_url = upload_file("company_logos",logo.filename,logo_contents,logo.content_type)
-            job_board.logo_url = file_url
+        if logo is not None:
+            if logo.filename :
+                logo_contents = await logo.read()
+                file_url = upload_file("company_logos",logo.filename,logo_contents,logo.content_type)
+                job_board.logo_url = file_url
         else:
             file_url = job_board.logo_url 
 
@@ -210,7 +248,7 @@ async def update_job_board(job_board_id: int,
                 
     return {"job_board_id": job_board_id,"company_name":c_name, "file_url":file_url }
 
-
+## delete job board
 @app.delete("/api/job-boards/{job_board_id}")
 def delete_job_board(job_board_id: int):
 
@@ -254,11 +292,11 @@ class GetJobApplications(BaseModel):
     email: str
     resume : UploadFile = File()
     
-
+##create job application
 @app.post("/api/job-applications")
 async def api_create_new_job_application(job_application:Annotated[GetJobApplications,Form()] ):
     logo_contents = await job_application.resume.read()
-    file_url = upload_file("company_logos",job_application.resume.filename,logo_contents,job_application.resume.content_type)
+    file_url = upload_file_resume("resumes",job_application.resume.filename,logo_contents,job_application.resume.content_type)
     
     with get_db_session() as session:
 
@@ -284,13 +322,30 @@ async def api_create_new_job_application(job_application:Annotated[GetJobApplica
     return {"status":"User added"}
 
 
-
-@app.get("/api/job-applications")
+## get job applications
+@app.get("/api/job-application")
 async def get_job_application():
      with get_db_session() as session:
         get_job_applications = session.query(JobApplication).all()
 
         return get_job_applications
+     
+## get job application by id
+@app.get("/api/job-applications/{job_post_id}")
+async def get_job_application(job_post_id : int):
+     print("IDDDDDD----",job_post_id)
+     with get_db_session() as session:
+        get_job_applications = session.query(JobApplication).filter(JobApplication.job_post_id == job_post_id).all()
+
+        return get_job_applications
+     
+##get job posts by job_post_id
+@app.get("/api/job-posts/{job_post_id}")
+async def get_job_posts(job_post_id : int):
+    with get_db_session() as session:
+        get_job_post = session.query(JobPost).filter(JobPost.id == job_post_id).all()
+        
+        return get_job_post
 
 @app.put("/api/job-posts/{job_post_id}/close")
 async def close_job_posts(job_post_id : int):
@@ -302,6 +357,23 @@ async def close_job_posts(job_post_id : int):
 
     return{"details":f"{job_post_id} is Closed"}
 
+##ADMIN SESSION:
+class AdminLoginForm(BaseModel):
+   username : str
+   password : str
+
+@app.post("/api/admin-login")
+async def admin_login(response: Response, admin_login_form: Annotated[AdminLoginForm, Form()]):
+   auth_response = authenticate_admin(admin_login_form.username, admin_login_form.password)
+   if auth_response is not None:
+      secure = settings.PRODUCTION
+      response.set_cookie(key="admin_session", value=auth_response, httponly=True, secure=secure, samesite="lax")
+      print(Cookie(None))
+      return {response}
+   else:
+      
+      raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+   
 
   
 @app.get("/{full_path:path}")

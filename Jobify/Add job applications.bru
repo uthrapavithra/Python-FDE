@@ -4,7 +4,7 @@ meta {
   seq: 5
 }
 
-post {
+get {
   url: http://localhost:8000/api/job-applications
   body: multipartForm
   auth: inherit
@@ -12,9 +12,9 @@ post {
 
 body:multipart-form {
   job_post_id: 1
-  first_name: John
-  last_name: Doe
-  email: john@mail.com
+  first_name: Tom
+  last_name: Jim
+  email: tom@mail.com
   resume: @file(C:\Users\uthra.v\Documents\Training\Full_Stack\Python-FDE\john.txt)
 }
 

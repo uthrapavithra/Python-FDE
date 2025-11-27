@@ -1,18 +1,18 @@
 meta {
-  name: Update job board
+  name: ADMIN auth
   type: http
-  seq: 7
+  seq: 9
 }
 
-put {
-  url: {{BASE_URL}}/api/job-boards/13
+post {
+  url: {{BASE_URL}}/api/admin-login
   body: multipartForm
   auth: inherit
 }
 
 body:multipart-form {
-  company_name: qwer
-  logo: @file()
+  username: admin
+  password: admin123
 }
 
 settings {
